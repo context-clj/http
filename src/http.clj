@@ -13,7 +13,8 @@
    [ring.util.response]
    [http.routing]
    [http.formats]
-   [org.httpkit.client :as http-client])
+   [org.httpkit.client :as http-client]
+   [clojure.spec.alpha :as s])
   (:import [java.io BufferedWriter OutputStreamWriter ByteArrayInputStream ByteArrayOutputStream]
            [java.nio.charset StandardCharsets]
            [java.util.zip GZIPOutputStream]))
@@ -35,9 +36,6 @@
     (cond (string? b) (cheshire.core/parse-string b keyword)
           (instance? java.io.InputStream b) (cheshire.core/parse-stream b keyword)
           :else b)))
-
-(defn render-index [ctx req]
-  {:body "ok"})
 
 (defn resolve-operation [meth uri]
   (let [parts  (rest (str/split uri #"/"))
@@ -85,19 +83,34 @@
 
 (defn parse-route [uri]
   (->> (str/split (str/replace uri #"(^/|/$)" "") #"/")
+       (remove str/blank?)
        (mapv (fn [i]
                (if (str/starts-with? i ":")
                  [(keyword (subs i 1))]
                  i)))))
 
+(s/def ::path string?)
+(s/def ::method #(contains? #{:get :post :put :delete :patch :head} %))
+(s/def ::var var?)
+;; TODO check function
+(s/def ::fn any?)
+(s/def ::endpoint (s/keys :req-un [::path ::method ::fn]))
 
-(defn register-endpoint [ctx meth url f & [opts]]
-  (let [route (parse-route url)
+
+;; make it macros with validation
+(defn -register-endpoint [ctx {meth :method path :path f :fn :as opts}]
+  (let [route (parse-route (str/replace path #"^/" ""))
         path (into route [meth])]
-    (system/info ctx ::register-endpoint (str meth " " url " -> " f))
+    (system/info ctx ::register-endpoint (str meth " " path " -> " f))
     (system/update-system-state
      ctx [:endpoints]
-     (fn [x] (assoc-in x path (merge {:fn f} opts))))))
+     (fn [x] (assoc-in x path opts)))))
+
+(defmacro register-endpoint [context {_path :path _method :method _fn :fn :as endpoint}]
+  (when-not (s/valid? ::endpoint endpoint)
+    (throw (ex-info "Invalid endpoint" (s/explain-data ::endpoint endpoint))))
+  `(-register-endpoint ~context ~endpoint))
+
 
 
 (defn clear-endpoints [ctx]
@@ -119,6 +132,7 @@
     (when-let [f (:fn on-request-hook)]
       (f ctx params))))
 
+;;TODO look into content header of request
 (defn format-response [ctx resp]
   (if-not (and (:body resp) (or (map? (:body resp)) (vector? (:body resp))))
     resp
@@ -132,9 +146,6 @@
     (cond
       (and (contains? #{:get :head} meth) (str/starts-with? (or uri "") "/static/"))
       (handle-static req)
-
-      (and (= "/" uri) (= :get meth))
-      (render-index ctx req)
 
       :else
       (let [query-params (parse-params (:query-string req) "UTF-8")]
@@ -152,7 +163,7 @@
 
 (defn stream [req cb]
   (server/with-channel req chan
-    (server/on-close chan (fn [_status] (println "Close channel")))
+    (server/on-close chan (fn [_status] ))
     (future
       (try
         (server/send! chan {:headers {"content-type" "application/x-ndjson" "content-encoding" "gzip"}} false)
@@ -175,11 +186,19 @@
           (server/close chan))))))
 
 
+(defn json-content-type? [resp]
+  (= "application/json" (get-in resp [:headers :content-type])))
+
 (defn request [ctx {path :path}]
   (let [url (str "http://localhost:" (system/get-system-state ctx [:port]) path)
         resp @(http-client/get url)]
     (system/info ctx ::get url)
-    (update resp :body (fn [x] (if (string? x) x (if (nil? x) nil (slurp x)))))))
+    (update resp :body (fn [x]
+                         (when-let [body (if (string? x) x (if (nil? x) nil (slurp x)))]
+                           (cond (json-content-type? resp)
+                                 (cheshire.core/parse-string body keyword)
+                                 :else body)
+                           )))))
 
 (system/defmanifest
   {:description "http server module"
@@ -188,11 +207,12 @@
    {:port
     {:type "integer"
      :default 8080
+     :required true
      :validator pos-int?}}})
 
 (system/defstart [context config]
-  (let [port (or (:port config) 7777)]
-    (system/info context ::start "start http server" {:port port})
+  (let [port (:port config)]
+    (system/info context ::start (str "start http server" config))
     ;; TODO: move to manifest
     (system/manifest-hook context ::on-request {:desc "This hook is called on request and passed method, uri and params"})
     {:server (server/run-server (fn [req] (#'dispatch context req)) {:port port}) :port port}))
