@@ -7,7 +7,7 @@
    :body (http/get-routes context)})
 
 (system/defstart [context config]
-  (http/register-endpoint context :get "/api" #'get-open-api)
+  (http/register-endpoint context {:method :get :path  "/api" :fn  #'get-open-api})
   {})
 
 (system/defmanifest
