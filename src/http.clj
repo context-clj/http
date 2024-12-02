@@ -189,14 +189,20 @@
 (defn json-content-type? [resp]
   (= "application/json" (get-in resp [:headers :content-type])))
 
-(defn request [ctx {path :path}]
+(defn ndjson-content-type? [resp]
+  (= "application/x-ndjson" (get-in resp [:headers :content-type])))
+
+(defn request [ctx {path :path qp :query-params :as opts}]
   (let [url (str "http://localhost:" (system/get-system-state ctx [:port]) path)
-        resp @(http-client/get url)]
+        resp @(http-client/get url opts)]
     (system/info ctx ::get url)
     (update resp :body (fn [x]
                          (when-let [body (if (string? x) x (if (nil? x) nil (slurp x)))]
                            (cond (json-content-type? resp)
                                  (cheshire.core/parse-string body keyword)
+                                 (ndjson-content-type? resp)
+                                 (->> (str/split body #"\n")
+                                      (mapv (fn [x] (cheshire.core/parse-string x keyword))))
                                  :else body)
                            )))))
 
