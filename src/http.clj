@@ -19,8 +19,6 @@
            [java.nio.charset StandardCharsets]
            [java.util.zip GZIPOutputStream]))
 
-
-
 (set! *warn-on-reflection* true)
 
 (defn handle-static [{meth :request-method uri :uri :as req}]
@@ -58,11 +56,11 @@
   (resolve-operation :get "/Patient/pt-1/history")
   )
 
-(defn parse-params [params encoding]
-  (let [params (when params (reduce (fn [acc [k v]] (assoc acc (keyword k) v)) {} (codec/form-decode params encoding)))]
+(defn parse-params [params]
+  (let [params (when params (reduce (fn [acc [k v]] (assoc acc (keyword k) v)) {} (codec/form-decode params  "UTF-8")))]
     (if (map? params) params {})))
 
-(parse-params "a=2%20;" "UTF-8")
+(parse-params "a=2%20;")
 
 (defn response-body [ctx body]
   (cheshire.core/generate-string body))
@@ -116,7 +114,7 @@
 (defn clear-endpoints [ctx]
   (system/clear-system-state ctx [:endpoints]))
 
-(defn unregister-endpoint [ctx meth url]
+(defn unregister-endpoint [ctx {meth :method url :path}]
   (let [route (parse-route url)]
     (system/clear-system-state ctx (into [:endpoints] (conj route meth)))))
 
@@ -140,6 +138,16 @@
      (update :body (fn [x] (if (or (vector? x) (map? x)) (cheshire.core/generate-string x) x)))
      (assoc-in [:headers "content-type"] "application/json"))))
 
+(defn authorization-enabled? [context]
+  (system/get-config context :enable-authorization))
+
+(defn authorize [context op request]
+  (->> (system/get-hooks context ::authorize)
+       (some
+        (fn [[hook-id hook]]
+          (system/info context ::auth-hook (str hook-id))
+          (hook context op request)))))
+
 (defn dispatch [system {meth :request-method uri :uri :as req}]
   (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})
         ctx (apply-middlewares ctx req)]
@@ -148,14 +156,16 @@
       (handle-static req)
 
       :else
-      (let [query-params (parse-params (:query-string req) "UTF-8")]
+      (let [query-params (parse-params (:query-string req))]
         (if-let [{{f :fn :as op} :match params :params} (resolve-endpoint ctx meth uri)]
-          (do
-            (system/info ctx meth uri {:route-params params})
-            (on-request-hooks ctx {:uri uri :method meth :query-params query-params})
-            (->>
-             (f ctx (assoc (merge req op) :query-params query-params :route-params params))
-             (format-response ctx)))
+          (if (and (authorization-enabled? ctx) (not (authorize ctx op req)))
+            {:status 403}
+            (do
+              (system/info ctx meth uri {:route-params params})
+              (on-request-hooks ctx {:uri uri :method meth :query-params query-params})
+              (->>
+               (f ctx (assoc (merge req op) :query-params query-params :route-params params))
+               (format-response ctx))))
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
             {:status 404
@@ -209,12 +219,9 @@
 (system/defmanifest
   {:description "http server module"
    :deps []
-   :config
-   {:port
-    {:type "integer"
-     :default 8080
-     :required true
-     :validator pos-int?}}})
+   :define-hook {::authorize {:args [::operation-definition ::request] :result ::authorized}}
+   :config {:port {:type "integer" :default 8080 :required true :validator pos-int?}
+            :enable-authorization {:type "boolean"}}})
 
 (system/defstart [context config]
   (let [port (:port config)]
@@ -239,9 +246,9 @@
     (println :HTTP (:uri req))
     ctx)
 
-  (def context (system/start-system {:services ["http" "http.openapi"] :http {:port 8888}}))
+  (def context (system/start-system {:services ["http" "http.openapi"] :http {:port 8889}}))
 
-  (system/get-system-state context [])
+  (system/get-system-state context [:port])
 
   context
 
@@ -251,12 +258,16 @@
 
   (register-middleware context #'logging-mw)
 
-  (register-endpoint context :get "/test" #'get-test)
+  (register-endpoint context {:method :get :path  "/test" :fn  #'get-test})
+
   (register-endpoint context :get "/Patient/:id" #'get-test)
 
   (request context {:path "/test"})
 
-  (unregister-endpoint context :get "/test")
+  (get-routes context)
+
+  (unregister-endpoint context {:method :get :path "/test"})
+
   (clear-endpoints context)
 
 
