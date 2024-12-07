@@ -13,7 +13,7 @@
         healthsamurai/matcho          {:mvn/version "0.3.8"}
 
         context/schema {:git/url "https://github.com/context-clj/system.git"
-                        :sha "933d5e29b042d90db3ba6911bdb934976875cc3d"}
+                        :sha "de4622c11278af431d9929e7f5d7b8302bdf11f2"}
         }
 
  :aliases
