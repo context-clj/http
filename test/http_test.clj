@@ -1,7 +1,7 @@
 (ns http-test
   (:require [system]
             [http]
-            [clojure.test :as t]
+            [clojure.test :refer [deftest is testing]]
             [clojure.string]
             [matcho.core :as matcho]))
 
@@ -30,7 +30,47 @@
   [context op req]
   (not (clojure.string/starts-with? (:path op) "/admin")))
 
-(t/deftest test-http
+(deftest test-register-endpoint
+  (ensure-context)
+
+  (testing "when path is a string"
+    (is (macroexpand '(http/register-endpoint
+                       context
+                       {:method :get
+                        :path "/foobar"
+                        :fn identity}))
+        "Unexpected error during macro expansion"))
+  (testing "when path is a list"
+    (is (macroexpand '(http/register-endpoint
+                        context
+                        {:method :get
+                         :path (str "/foo/" 123)
+                         :fn identity}))
+        "Unexpected error during macro expansion"))
+  (testing "when endpoint doesn't conform to the schema"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid endpoint"
+         (http/register-endpoint
+          context
+          {:method :get :path nil :fn identity}))
+        "Non-conforming path must throw")
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid endpoint"
+         (http/register-endpoint
+          context
+          {:method "get" :path "/" :fn identity}))
+        "Non-conforming method must throw")
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid endpoint"
+         (http/register-endpoint
+          context
+          {:method :get :path "/" :fn nil}))
+        "Non-conforming fn must throw")))
+
+(deftest test-http
   (ensure-context)
 
   (http/unregister-endpoint context {:method :get :path "/"})

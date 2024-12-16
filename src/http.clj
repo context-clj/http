@@ -89,11 +89,8 @@
 
 (s/def ::path string?)
 (s/def ::method #(contains? #{:get :post :put :delete :patch :head} %))
-(s/def ::var var?)
-;; TODO check function
-(s/def ::fn any?)
+(s/def ::fn ifn?)
 (s/def ::endpoint (s/keys :req-un [::path ::method ::fn]))
-
 
 ;; make it macros with validation
 (defn -register-endpoint [ctx {meth :method path :path f :fn :as opts}]
@@ -105,9 +102,11 @@
      (fn [x] (assoc-in x path opts)))))
 
 (defmacro register-endpoint [context {_path :path _method :method _fn :fn :as endpoint}]
-  (when-not (s/valid? ::endpoint endpoint)
-    (throw (ex-info "Invalid endpoint" (s/explain-data ::endpoint endpoint))))
-  `(-register-endpoint ~context ~endpoint))
+  `(let [result# (s/conform ~::endpoint ~endpoint)]
+     (if (= :clojure.spec.alpha/invalid result#)
+       (throw (ex-info "Invalid endpoint"
+                       (s/explain-data ~::endpoint ~endpoint)))
+       (-register-endpoint ~context ~endpoint))))
 
 
 
@@ -169,7 +168,7 @@
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
             {:status 404
-             :body (str meth " " uri " is not found")}))))))
+             :body (str (name meth) " " uri " is not found")}))))))
 
 (defn stream [req cb]
   (server/with-channel req chan
@@ -293,6 +292,4 @@
   (system/register-hook context ::on-request #'on-request-hook)
 
   (request context {:path "/api"})
-
-
   )
