@@ -66,14 +66,22 @@
   (cheshire.core/generate-string body))
 
 (defn register-middleware [ctx mw-fn]
-  (system/update-system-state ctx [:middlewares] (fn [mws] (conj (or mws []) mw-fn))))
+  (system/update-system-state ctx [:middlewares] (fn [mws] (conj (or mws #{}) mw-fn))))
+
+(defn unregister-middleware [ctx mw-fn]
+  (system/update-system-state ctx [:middlewares] (fn [mws] (disj mw-fn))))
 
 (defn clear-middlewares [ctx]
-  (system/update-system-state ctx [:middlewares] (fn [mws] [])))
+  (system/update-system-state ctx [:middlewares] (fn [mws] #{})))
 
 (defn apply-middlewares [ctx req]
   (->> (system/get-system-state ctx [:middlewares])
-       (reduce (fn [ctx mw] (mw ctx req)) ctx)))
+       (reduce (fn [ctx mw]
+                 (println :ctx-in ctx :mw mw)
+                 (let [ctx (mw ctx req)]
+                   (println :ctx-out ctx :mw mw)
+                   ctx)
+                 ) ctx)))
 
 ;; example work with context
 (defn ctx-remote-addr [ctx]
@@ -155,11 +163,13 @@
   (system/get-config context :enable-authorization))
 
 (defn authorize [context op request]
+  (println :authorize  :hooks (system/get-hooks context ::authorize))
   (->> (system/get-hooks context ::authorize)
        (some
         (fn [[hook-id hook]]
-          (system/info context ::auth-hook (str hook-id))
-          (hook context op request)))))
+          (let [res (hook context op request)]
+            (system/info context ::auth-hook (str hook-id) res)
+            res)))))
 
 (defn dispatch [system {meth :request-method uri :uri :as req}]
   (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})
@@ -279,7 +289,7 @@
 
   (register-endpoint context {:method :get :path  "/test" :fn  #'get-test})
 
-  (register-endpoint context :get "/Patient/:id" #'get-test)
+  (register-endpoint context {:method  :get :path "/Patient/:id" :fn #'get-test})
 
   (request context {:path "/test"})
 

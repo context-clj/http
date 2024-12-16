@@ -12,9 +12,8 @@
         org.apache.commons/commons-compress         {:mvn/version "1.26.0"}
         healthsamurai/matcho          {:mvn/version "0.3.8"}
 
-        context/schema {:git/url "https://github.com/context-clj/system.git"
-                        :sha "a1101552d5f2d41512e4ba70402e2614fd2de8e8"}
-        }
+        context/system {:git/url "https://github.com/context-clj/system.git"
+                        :sha "d178613a466fdd74aa73a178ffa2851919d78122"}}
 
  :aliases
  {:dev

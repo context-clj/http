@@ -17,19 +17,6 @@
 
   )
 
-(defn get-index [context req]
-  {:status 200 :body "Here"})
-
-(defn get-patient [context req]
-  (http/format-response context {:status 200 :body (:route-params req)}))
-
-(defn get-patients [context req]
-  (http/format-response context {:status 200 :body (:route-params req)}))
-
-(defn authorize 
-  [context op req]
-  (not (clojure.string/starts-with? (:path op) "/admin")))
-
 (deftest test-register-endpoint
   (ensure-context)
 
@@ -70,29 +57,58 @@
           {:method :get :path "/" :fn nil}))
         "Non-conforming fn must throw")))
 
+
+(defn authorize
+  [context op req]
+  (not (clojure.string/starts-with? (:path op) "/admin")))
+
+(defn get-index [context req]
+  {:status 200 :body "Here"})
+
+(defn get-patient [context req]
+  (http/format-response context {:status 200 :body (:route-params req)}))
+
+(defn get-patients [context req]
+  (http/format-response context {:status 200 :body (:route-params req)}))
+
+
 (defn rt-middleware [context {rp :route-params}]
   (system/ctx-set context [:resource_type] rp))
 
-(deftest test-http
-  (ensure-context)
+(deftest test-middleware
+  (reload-context)
 
-  (http/unregister-endpoint context {:method :get :path "/"})
+  (system/register-hook context :http/authorize ::auth #'authorize)
+
+  (matcho/match
+   (http/request context {:path "/"})
+   {:status 404})
+
+
+  ;; (http/register-middleware context {:method :get :path "admin/:resource_type/:id" :fn #'rt-middleware})
+  ;; (http/register-middleware context {:method :get :path "admin/:resource_type/:id" :fn #'rt-middleware})
+
+
+  (http/register-endpoint context {:method :get :path "/" :fn #'get-index})
+
+  (matcho/match
+   (http/request context {:path "/"})
+   {:status 200})
+
+  (http/unregister-endpoint context {:method :get :path "/"}) 
 
   (matcho/match
    (http/request context {:path "/"})
    {:status 404})
 
   (http/register-endpoint context {:method :get :path "/" :fn #'get-index})
+
+  context
+  (is (system/get-hooks context :http/authorize))
+
   (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patients :params {:_id {:type "string"}}})
   (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patient})
   (http/register-endpoint context {:method :get :path "/admin/Patient/:id" :fn #'get-patient})
-
-
-  (http/register-middleware context {:method :get :path "admin/:resource_type/:id" :fn #'rt-middleware})
-
-  (system/register-hook context :http/authorized ::auth #'authorize)
-
-  (http/get-routes context)
 
   (matcho/match
    (http/request context {:path "/"})
