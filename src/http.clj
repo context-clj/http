@@ -104,10 +104,24 @@
      ctx [:endpoints]
      (fn [x] (assoc-in x path opts)))))
 
+;; TODO: use spec instrumentation to check params
 (defmacro register-endpoint [context {_path :path _method :method _fn :fn :as endpoint}]
   (when-not (s/valid? ::endpoint endpoint)
     (throw (ex-info "Invalid endpoint" (s/explain-data ::endpoint endpoint))))
   `(-register-endpoint ~context ~endpoint))
+
+
+(defn -register-context-middleware [context {meth :method path :path f :fn :as opts}]
+  (let [route (parse-route (str/replace path #"^/" ""))
+        path (into route [meth])]
+    (system/info context ::register-endpoint (str meth " " path " -> " f))
+    (system/update-system-state
+     context [:middlewares]
+     (fn [x] (assoc-in x path opts)))))
+
+;; TODO find all mw and call it in request - updating context
+(defmacro register-context-middleware [context {_path :path _method :method _fn :fn :as mw}]
+  `(-register-context-middleware ~context ~mw))
 
 
 
@@ -160,12 +174,15 @@
         (if-let [{{f :fn :as op} :match params :params} (resolve-endpoint ctx meth uri)]
           (if (and (authorization-enabled? ctx) (not (authorize ctx op req)))
             {:status 403}
-            (do
+            (let [start (System/nanoTime)]
+              ;; TODO set context for logger
               (system/info ctx meth uri {:route-params params})
               (on-request-hooks ctx {:uri uri :method meth :query-params query-params})
-              (->>
-               (f ctx (assoc (merge req op) :query-params query-params :route-params params))
-               (format-response ctx))))
+              (let [res (->>
+                         (f ctx (assoc (merge req op) :query-params query-params :route-params params))
+                         (format-response ctx))]
+                (system/info ctx meth uri {:duration (/ (- (System/nanoTime) start) 1000000.0) :status (:status res)})
+                res)))
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
             {:status 404

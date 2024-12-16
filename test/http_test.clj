@@ -30,6 +30,9 @@
   [context op req]
   (not (clojure.string/starts-with? (:path op) "/admin")))
 
+(defn rt-middleware [context {rp :route-params}]
+  (system/ctx-set context [:resource_type] rp))
+
 (t/deftest test-http
   (ensure-context)
 
@@ -43,6 +46,9 @@
   (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patients :params {:_id {:type "string"}}})
   (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patient})
   (http/register-endpoint context {:method :get :path "/admin/Patient/:id" :fn #'get-patient})
+
+
+  (http/register-middleware context {:method :get :path "admin/:resource_type/:id" :fn #'rt-middleware})
 
   (system/register-hook context :http/authorized ::auth #'authorize)
 
