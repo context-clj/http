@@ -89,11 +89,8 @@
 
 (s/def ::path string?)
 (s/def ::method #(contains? #{:get :post :put :delete :patch :head} %))
-(s/def ::var var?)
-;; TODO check function
-(s/def ::fn any?)
+(s/def ::fn ifn?)
 (s/def ::endpoint (s/keys :req-un [::path ::method ::fn]))
-
 
 ;; make it macros with validation
 (defn -register-endpoint [ctx {meth :method path :path f :fn :as opts}]
@@ -106,9 +103,11 @@
 
 ;; TODO: use spec instrumentation to check params
 (defmacro register-endpoint [context {_path :path _method :method _fn :fn :as endpoint}]
-  (when-not (s/valid? ::endpoint endpoint)
-    (throw (ex-info "Invalid endpoint" (s/explain-data ::endpoint endpoint))))
-  `(-register-endpoint ~context ~endpoint))
+  `(let [result# (s/conform ~::endpoint ~endpoint)]
+     (if (= :clojure.spec.alpha/invalid result#)
+       (throw (ex-info "Invalid endpoint"
+                       (s/explain-data ~::endpoint ~endpoint)))
+       (-register-endpoint ~context ~endpoint))))
 
 
 (defn -register-context-middleware [context {meth :method path :path f :fn :as opts}]
@@ -186,7 +185,7 @@
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
             {:status 404
-             :body (str meth " " uri " is not found")}))))))
+             :body (str (name meth) " " uri " is not found")}))))))
 
 (defn stream [req cb]
   (server/with-channel req chan
@@ -237,15 +236,17 @@
   {:description "http server module"
    :deps []
    :define-hook {::authorize {:args [::operation-definition ::request] :result ::authorized}}
-   :config {:port {:type "integer" :default 8080 :required true :validator pos-int?}
+   :config {:binding {:type "string" :default "127.0.0.1" :validator (complement empty?)}
+            :port {:type "integer" :default 8080 :required true :validator pos-int?}
             :enable-authorization {:type "boolean"}}})
 
 (system/defstart [context config]
-  (let [port (:port config)]
+  (let [binding (:binding config)
+        port (:port config)]
     (system/info context ::start (str "start http server" config))
     ;; TODO: move to manifest
     (system/manifest-hook context ::on-request {:desc "This hook is called on request and passed method, uri and params"})
-    {:server (server/run-server (fn [req] (#'dispatch context req)) {:port port}) :port port}))
+    {:server (server/run-server (fn [req] (#'dispatch context req)) {:ip binding :port port}) :binding binding :port port}))
 
 (system/defstop [context state]
   (when-let [stop (:server state)]
@@ -266,6 +267,7 @@
   (def context (system/start-system {:services ["http" "http.openapi"] :http {:port 8889}}))
 
   (system/get-system-state context [:port])
+  (system/get-system-state context [:binding])
 
   context
 
@@ -307,6 +309,4 @@
   (system/register-hook context ::on-request #'on-request-hook)
 
   (request context {:path "/api"})
-
-
   )
