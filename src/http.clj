@@ -14,6 +14,7 @@
    [http.routing]
    [http.formats]
    [org.httpkit.client :as http-client]
+   [clojure.java.io :as io]
    [clojure.spec.alpha :as s])
   (:import [java.io BufferedWriter OutputStreamWriter ByteArrayInputStream ByteArrayOutputStream]
            [java.nio.charset StandardCharsets]
@@ -32,7 +33,7 @@
 (defn parse-body [b]
   (when b
     (cond (string? b) (cheshire.core/parse-string b keyword)
-          (instance? java.io.InputStream b) (cheshire.core/parse-stream b keyword)
+          (instance? java.io.InputStream b) (cheshire.core/parse-stream (io/reader b :encoding "UTF-8") keyword)
           :else b)))
 
 (defn resolve-operation [meth uri]
