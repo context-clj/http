@@ -61,6 +61,11 @@
   (let [params (when params (reduce (fn [acc [k v]] (assoc acc (keyword k) v)) {} (codec/form-decode params  "UTF-8")))]
     (if (map? params) params {})))
 
+(defn encode-params [params]
+  (codec/form-encode params))
+
+(encode-params {:a 1 :b "$@#/"})
+
 (parse-params "a=2%20;")
 
 (defn response-body [ctx body]
