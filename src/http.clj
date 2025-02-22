@@ -8,6 +8,7 @@
    [ring.middleware.head]
    [ring.middleware.params]
    [ring.middleware.cookies]
+   [ring.middleware.content-type]
    [ring.util.codec :as codec]
    [ring.util.io]
    [ring.util.response]
@@ -28,7 +29,9 @@
               :allow-symlinks? true}
         path (subs (codec/url-decode (:uri req)) 8)]
     (-> (ring.util.response/resource-response path opts)
-        (ring.middleware.head/head-response req))))
+        (ring.middleware.head/head-response req)
+        (ring.middleware.content-type/content-type-response req)
+        (ring.util.response/charset "utf-8"))))
 
 (defn parse-body [b]
   (when b
@@ -57,6 +60,7 @@
   (resolve-operation :get "/Patient/pt-1/history")
   )
 
+(def form-decode codec/form-decode)
 (defn parse-params [params]
   (let [params (when params (reduce (fn [acc [k v]] (assoc acc (keyword k) v)) {} (codec/form-decode params  "UTF-8")))]
     (if (map? params) params {})))
