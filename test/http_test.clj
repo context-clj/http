@@ -57,6 +57,9 @@
           {:method :get :path "/" :fn nil}))
         "Non-conforming fn must throw")))
 
+(defn authenticate
+  [context op req]
+  (http/authenticated! (assoc context ::user {:id "user-id"})))
 
 (defn authorize
   [context op req]
@@ -106,9 +109,10 @@
   context
   (is (system/get-hooks context :http/authorize))
 
-  (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patients :params {:_id {:type "string"}}})
+  (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patients :params {:_id {:type "string"}} :public true})
   (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patient})
   (http/register-endpoint context {:method :get :path "/admin/Patient/:id" :fn #'get-patient})
+  (http/register-endpoint context {:method :get :path "/admin/public" :fn #'get-patient  :public true})
 
   (matcho/match
    (http/request context {:path "/"})
@@ -121,7 +125,11 @@
 
   (matcho/match
    (http/request context {:path "/admin/Patient/pt-1"})
-   {:status 403})
+    {:status 403})
+
+  (matcho/match
+      (http/request context {:path "/admin/public"})
+    {:status 200})
 
 
   )

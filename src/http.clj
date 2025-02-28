@@ -77,6 +77,10 @@
 (defn unregister-middleware [ctx mw-fn]
   (system/update-system-state ctx [:middlewares] (fn [mws] (disj mw-fn))))
 
+(defn register-authorize-hook [context auth-fn]
+  (system/register-hook context :http/authorize auth-fn auth-fn))
+
+
 (defn clear-middlewares [ctx]
   (system/update-system-state ctx [:middlewares] (fn [mws] #{})))
 
@@ -137,7 +141,6 @@
   `(-register-context-middleware ~context ~mw))
 
 
-
 (defn clear-endpoints [ctx]
   (system/clear-system-state ctx [:endpoints]))
 
@@ -168,14 +171,39 @@
 (defn authorization-enabled? [context]
   (system/get-config context :enable-authorization))
 
+(defn authenticated! [context]
+  (assoc context ::authenticated true))
+
+(defn authenticated? [context]
+  (get context ::authenticated))
+
+(defn authenticate [context op request]
+  )
+
 (defn authorize [context op request]
-  (println :authorize  :hooks (system/get-hooks context ::authorize))
-  (->> (system/get-hooks context ::authorize)
-       (some
-        (fn [[hook-id hook]]
-          (let [res (hook context op request)]
-            (system/info context ::auth-hook (str hook-id) res)
-            res)))))
+  ;; (println :authorize  :hooks (system/get-hooks context ::authorize))
+  (or (:public op)
+      (->> (system/get-hooks context ::authorize)
+           (some
+            (fn [[hook-id hook]]
+              (let [res (hook context op request)]
+                (system/info context ::auth-hook (str hook-id) res)
+                res))))))
+
+;; hook should return nil if does not want to handle this
+(defn handle-unauthorized [context op request]
+  (or
+   (->> (system/get-hooks context ::unauthorized)
+        (some
+         (fn [[hook-id hook]]
+           (let [res (hook context op request)]
+             (system/info context ::auth-hook (str hook-id) res)
+             res))))
+   {:status 403}))
+
+(defn handle-anonimous [context op request]
+  ;; TODO
+  )
 
 (defn dispatch [system {meth :request-method uri :uri :as req}]
   (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})
@@ -187,17 +215,21 @@
       :else
       (let [query-params (parse-params (:query-string req))]
         (if-let [{{f :fn :as op} :match params :params} (resolve-endpoint ctx meth uri)]
-          (if (and (authorization-enabled? ctx) (not (authorize ctx op req)))
-            {:status 403}
-            (let [start (System/nanoTime)]
-              ;; TODO set context for logger
-              (system/info ctx meth uri {:route-params params})
-              (on-request-hooks ctx {:uri uri :method meth :query-params query-params})
-              (let [res (->>
-                         (f ctx (assoc (merge req op) :query-params query-params :route-params params))
-                         (format-response ctx))]
-                (system/info ctx meth uri {:duration (/ (- (System/nanoTime) start) 1000000.0) :status (:status res)})
-                res)))
+          (let [auth-ctx (authenticate ctx op req)]
+            ;;
+            (if-let [anonimous-response (when (and (not (:public op)) (not (authenticated? auth-ctx))) (handle-anonimous auth-ctx op req))]
+              anonimous-response
+              (if (and (authorization-enabled? auth-ctx) (not (authorize auth-ctx op req)))
+                (handle-unauthorized system op req)
+                (let [start (System/nanoTime)]
+                  ;; TODO set context for logger
+                  (system/info auth-ctx meth uri {:route-params params})
+                  (on-request-hooks auth-ctx {:uri uri :method meth :query-params query-params})
+                  (let [res (->>
+                             (f auth-ctx (assoc (merge req op) :query-params query-params :route-params params))
+                             (format-response auth-ctx))]
+                    (system/info auth-ctx meth uri {:duration (/ (- (System/nanoTime) start) 1000000.0) :status (:status res)})
+                    res)))))
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
             {:status 404
