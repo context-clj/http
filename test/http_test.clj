@@ -72,7 +72,7 @@
 (deftest test-middleware
   (reload-context)
 
-  (system/register-hook context :http/authorize ::authorize #'authorize)
+  (http/register-authorize-hook context #'authorize)
 
   (matcho/match
    (http/request context {:path "/"})
@@ -92,7 +92,7 @@
 
   (http/register-endpoint context {:method :get :path "/" :fn #'get-index})
 
-  (is (system/get-hooks context :http/authorize))
+  (is (http/authorize-hooks context))
 
   (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patients :params {:_id {:type "string"}}})
   (http/register-endpoint context {:method :get :path "/Patient/:id" :fn #'get-patient})
@@ -131,12 +131,36 @@
   {:status 200
    :body "You have been redirected!"})
 
+(defn on-endpoint [context endpoint opts]
+  (when (:menu endpoint)
+    (system/set-system-state context [:menu (:menu endpoint)] endpoint)))
+
+(defn get-menu [context]
+  (vals (system/get-system-state context [:menu])))
+
+(deftest test-endpoint-subs
+  (reload-context)
+
+  (http/subscribe-to-endpoint-register context {:fn #'on-endpoint})
+
+  (http/register-endpoint context {:method :get :path "/a" :fn #'get-index})
+  (http/register-endpoint context {:method :get :path "/b" :fn #'get-index :menu "Item 1"})
+  (http/register-endpoint context {:method :get :path "/c" :fn #'get-index})
+  (http/register-endpoint context {:method :get :path "/d" :fn #'get-index :menu "Item 2"})
+
+  (matcho/match
+      (get-menu context)
+    [{:menu "Item 1"}
+     {:menu "Item 2"}])
+
+  )
+
 (deftest test-auth-flow
   (reload-context)
 
-  (system/register-hook context :http/authenticate ::authenticate #'authenticate-my-user)
-  (system/register-hook context :http/handle-anonymous ::handle-anonymous #'handle-anonymous)
-  (system/register-hook context :http/authorize ::authorize #'authorize)
+  (http/register-authenticate-hook context #'authenticate-my-user)
+  (http/register-handle-anonymous-hook context #'handle-anonymous)
+  (http/register-authorize-hook context #'authorize)
 
   (http/register-endpoint context {:method :get :path "/private" :fn #'get-index})
   (http/register-endpoint context {:method :get :path "/admin" :fn #'get-index})

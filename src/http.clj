@@ -114,14 +114,34 @@
 (s/def ::fn ifn?)
 (s/def ::endpoint (s/keys :req-un [::path ::method ::fn]))
 
+
+(defn subscribe-to-endpoint-register
+  "subscribe to endpoint register (fn [context endpoint h])"
+  [context {f :fn :as h}]
+  (system/set-system-state context [:on-endpoint-register f] h))
+
+(defn unsubscribe-from-endpoint-register   [context {f :fn}]
+  (system/clear-system-state context [:on-endpoint-register f]))
+
+(defn register-endpoint-subscriptions [context]
+  (system/get-system-state context [:on-endpoint-register]))
+
+(defn notify-endpoint-register-subscriptions [context endpoint & [{focus-subs :focus-subs :as opts}]]
+  (doseq [[f f-opts] (register-endpoint-subscriptions context)]
+    (when (or (nil? focus-subs)
+              (contains? focus-subs f))
+      (f context endpoint f-opts))))
+
+;;TODO notify unregister subscriptions
+
+
 ;; make it macros with validation
-(defn -register-endpoint [ctx {meth :method path :path f :fn :as opts}]
+(defn -register-endpoint [context {meth :method path :path f :fn :as opts}]
   (let [route (parse-route (str/replace path #"^/" ""))
         path (into route [meth])]
-    (system/info ctx ::register-endpoint (str meth " " path " -> " f))
-    (system/update-system-state
-     ctx [:endpoints]
-     (fn [x] (assoc-in x path opts)))))
+    (system/info context ::register-endpoint (str meth " " path " -> " f))
+    (system/update-system-state context [:endpoints] (fn [x] (assoc-in x path opts)))
+    (notify-endpoint-register-subscriptions context opts)))
 
 ;; TODO: use spec instrumentation to check params
 (defmacro register-endpoint [context {_path :path _method :method _fn :fn :as endpoint}]
@@ -130,7 +150,6 @@
        (throw (ex-info "Invalid endpoint"
                        (s/explain-data ~::endpoint ~endpoint)))
        (-register-endpoint ~context ~endpoint))))
-
 
 (defn -register-context-middleware [context {meth :method path :path f :fn :as opts}]
   (let [route (parse-route (str/replace path #"^/" ""))
@@ -183,6 +202,9 @@
 (defn authenticated? [context]
   (get context ::authenticated))
 
+(defn register-authenticate-hook [context hook-var-fn]
+  (system/register-hook context ::authenticate hook-var-fn hook-var-fn))
+
 ;; authenticate hooks should return context
 (defn authenticate [context request]
   (if-let [hooks (seq (system/get-hooks context ::authenticate))]
@@ -194,15 +216,25 @@
      hooks)
     context))
 
+
+(defn register-authorize-hook [context hook-fn-var]
+  (system/register-hook context ::authorize hook-fn-var hook-fn-var))
+
+(defn authorize-hooks [context]
+  (system/get-hooks context ::authorize))
+
 ;; authenticate hooks should return bool
 (defn authorize [context request]
   (or (:public request)
-      (->> (system/get-hooks context ::authorize)
+      (->> (authorize-hooks context)
            (some
             (fn [[hook-id hook]]
               (let [res (hook context request)]
                 (system/info context ::authorize-hook (str hook-id) res)
                 res))))))
+
+(defn register-handle-anonymous-hook [context hook-fn-var]
+  (system/register-hook context :http/handle-anonymous hook-fn-var hook-fn-var))
 
 ;; authenticate hooks should return http response
 (defn handle-anonymous [context request]
