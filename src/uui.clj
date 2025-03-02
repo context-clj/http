@@ -3,6 +3,7 @@
             [http]
             [hiccup2.core :as hic]
             [uui.menu]
+            [uui.heroicons :as ico]
             [clojure.string :as str]))
 
 (def raw hic/raw)
@@ -72,7 +73,7 @@
    context request
    [:div {:class "flex"}
     (menu-button context request)
-    [:div {:class "px-6 py-3 flex-1"} body]]))
+    [:div {:class "px-6 py-4 flex-1"} body]]))
 
 
 (defn watch-styles []
@@ -81,6 +82,44 @@
   ;; run tailwindcss -i ./resources/public/app.css -o ./resources/public/app.build.css --watch
 
   )
+
+
+(defn tabs [{{tab :tab} :query-params} & tabs]
+  (let [tab-pairs (partition 2 tabs)
+        tab-index (apply hash-map tabs)
+        current-tab (or tab (first tabs))]
+    [:div#tab {:class "mb-2"}
+     [:div {:class "flex space-x-4 border-b border-gray-300"}
+      (for [[tab-name _] tab-pairs]
+        [:a
+         {:href (str "?tab=" (name tab-name))
+          :hx-target "#tab"
+          :class  [(if (= current-tab tab-name) "border-sky-500 text-gray-900" "border-transparent")
+                   "whitespace-nowrap border-b-2 px-1 pb-1 pt-2 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700"]}
+         tab-name])]
+     [:div {:class "mt-4"}
+      (if-let [f (get tab-index current-tab)] (f) [:div.text-red-500 (str "No view for " tab)])]]))
+
+
+(def bc-delim
+  [:svg {:class "size-5 shrink-0 text-gray-400", :viewBox "0 0 20 20", :fill "currentColor", :aria-hidden "true", :data-slot "icon"}
+   [:path {:fill-rule "evenodd", :d "M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z", :clip-rule "evenodd"}]])
+
+(defn breadcramp
+  "
+  (breadcramp [\"url1\" \"label\"] [\"url2\" \"label\"] [\"#\" \"label\"]])
+  "
+  [& pairs]
+  [:ol {:role "list", :class "flex space-x-4 items-center"}
+   (->> pairs
+        (map-indexed
+         (fn [idx [href & cnt]]
+           (into
+            [:a {:href href :class "text-sm font-medium text-gray-500 hover:text-gray-700 flex items-center hover:text-sky-600"}
+             (when (= 0 idx)
+               (ico/home "mr-2 size-4 text-gray-400"))
+             [:div cnt]])))
+        (interpose (ico/chevron-right "size-4 text-gray-400")))])
 
 (comment
 

@@ -22,7 +22,7 @@
             @apply border-b border-gray-400;
         }
         th {
-            @apply px-2 py-1 align-top text-semibold text-gray-600;
+            @apply px-2 py-1 align-top font-semibold text-gray-600;
         }
     }
     tr {
@@ -31,4 +31,12 @@
     td {
         @apply px-2 py-1 align-top;
     }
+}
+
+.uui-code {
+    @apply text-xs border-b border-gray-200 bg-gray-50 p-4 rounded-md whitespace-pre-wrap;
+}
+
+.uui-text {
+    @apply text-sm text-gray-500;
 }
