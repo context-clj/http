@@ -1,0 +1,26 @@
+@theme {
+    --font-display: "Satoshi", "sans-serif";
+}
+
+.uui-h1 {
+    @apply text-2xl/8 font-semibold text-zinc-950 sm:text-xl/8 dark:text-white;
+}
+
+.uui-h2 {
+    @apply text-lg my-2 flex items-baseline space-x-4;
+}
+
+.uui-hbox {
+    @apply py-2 flex space-x-4 hover:bg-gray-100 cursor-pointer;
+}
+.uui-link {
+    @apply text-sky-600 cursor-pointer;
+}
+.uui-table {
+    tr {
+        @apply border-b border-gray-200;
+    }
+    td {
+        @apply px-2 py-1 align-top;
+    }
+}

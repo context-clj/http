@@ -58,6 +58,7 @@
   [:html
    [:head
     [:script {:src "/static/htmx.min.js"}]
+    [:link {:rel "stylesheet", :href "/static/app.build.css"}]
     [:meta {:name "htmx-config", :content "{\"scrollIntoViewOnBoost\":false}"}]]
    [:body.text-gray-600 {:hx-boost "true"} body ]])
 
@@ -66,13 +67,22 @@
 
 (def menu-button uui.menu/menu-button)
 
+(defn layout [context request body]
+  (boost-response
+   context request
+   [:div {:class "flex"}
+    (menu-button context request)
+    [:div {:class "px-6 py-3 flex-1"} body]]))
+
+
+(defn watch-styles []
+  ;; generate app.css
+  ;; generate tailwind config
+  ;; run tailwindcss -i ./resources/public/app.css -o ./resources/public/app.build.css --watch
+
+  )
 
 (comment
-
-
-
-
-
 
 
   )
