@@ -34,7 +34,7 @@
 }
 
 .uui-code {
-    @apply text-xs border-b border-gray-200 bg-gray-50 p-4 rounded-md whitespace-pre-wrap;
+    @apply text-xs bg-gray-50 shadow-sm p-4 rounded-md whitespace-pre-wrap;
 }
 
 .uui-text {

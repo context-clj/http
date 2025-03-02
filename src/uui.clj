@@ -4,7 +4,8 @@
             [hiccup2.core :as hic]
             [uui.menu]
             [uui.heroicons :as ico]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cheshire.core]))
 
 (def raw hic/raw)
 
@@ -120,6 +121,14 @@
                (ico/home "mr-2 size-4 text-gray-400"))
              [:div cnt]])))
         (interpose (ico/chevron-right "size-4 text-gray-400")))])
+
+(defn json-block [data]
+  [:pre.uui-code
+   (raw
+    (-> (cheshire.core/generate-string data {:pretty true})
+        (str/replace #"\"(.*)\" :" "<span class='text-gray-400'>\"</span><b class='font-semibold text-gray-500'>$1</b><span class='text-gray-400'>\"</span><span class='text-gray-400'>:</span>")
+        (str/replace #"," "<span class='text-gray-300'>,</span>")
+        ))])
 
 (comment
 
