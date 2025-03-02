@@ -17,6 +17,14 @@
     @apply text-sky-600 cursor-pointer;
 }
 .uui-table {
+    thead {
+        tr {
+            @apply border-b border-gray-400;
+        }
+        th {
+            @apply px-2 py-1 align-top text-semibold text-gray-600;
+        }
+    }
     tr {
         @apply border-b border-gray-200;
     }
