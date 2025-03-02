@@ -22,7 +22,7 @@
 (defn rpc [fn-name & [params]]
   (let [m (meta fn-name)
         fn-nm  (str (:ns m) "/" (:name m))]
-    (str "/ui/rpc?" (http/encode-params (assoc params :method fn-nm)))))
+    (str "/uui/rpc?" (http/encode-params (assoc params :method fn-nm)))))
 
 (defn get-fn [fn-str]
   (let [[ns-name _fn-name] (str/split fn-str #"/")]
