@@ -224,7 +224,7 @@
     (some
      (fn [[hook-id hook]]
        (let [res (hook context request)]
-         (system/info context ::authenticate-hook (str hook-id) res)
+        ;;  (system/info context ::authenticate-hook (str hook-id) res) ;; TODO too much output
          res))
      hooks)
     context))
@@ -268,7 +268,9 @@
       :else
       (let [query-params (parse-params (:query-string req))]
         (if-let [{{f :fn :as op} :match params :params} (resolve-endpoint ctx meth uri)]
-          (let [enriched-req (assoc (merge req op) :query-params query-params :route-params params)
+          (let [enriched-req (-> (merge req op)
+                                 (assoc :query-params query-params :route-params params)
+                                 ring.middleware.cookies/cookies-request)
                 auth-ctx (authenticate ctx enriched-req)]
             (if-let [anonimous-response (when (and (authentication-enabled? auth-ctx)
                                                    (not (:public op))
