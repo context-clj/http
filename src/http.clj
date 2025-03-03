@@ -171,6 +171,18 @@
   (let [route (parse-route url)]
     (system/clear-system-state ctx (into [:endpoints] (conj route meth)))))
 
+(defn collect-endpoints-from-ns [ns]
+  (->> (ns-interns ns)
+       (filter #(:http (meta (second %))))
+       (remove nil?)
+       (mapv (fn [[_nm v]]
+               (let [m (:http (meta v))]
+                 (merge {:fn v :method (or (:method m) :get)} m))))))
+
+(defn register-ns-endpoints [context ns]
+  (doseq [endpoint (collect-endpoints-from-ns ns)]
+    (http/register-endpoint context endpoint)))
+
 (defn get-routes [ctx]
   (system/get-system-state ctx [:endpoints]))
 

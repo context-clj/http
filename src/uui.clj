@@ -111,7 +111,7 @@
   (breadcramp [\"url1\" \"label\"] [\"url2\" \"label\"] [\"#\" \"label\"]])
   "
   [& pairs]
-  [:ol {:role "list", :class "flex space-x-4 items-center"}
+  [:ol {:role "list", :class "flex space-x-4 items-center mb-2"}
    (->> pairs
         (map-indexed
          (fn [idx [href & cnt]]
