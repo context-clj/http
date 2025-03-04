@@ -18,6 +18,7 @@
    [clojure.java.io :as io]
    [clojure.spec.alpha :as s])
   (:import [java.io BufferedWriter OutputStreamWriter ByteArrayInputStream ByteArrayOutputStream]
+           [java.net URLDecoder]
            [java.nio.charset StandardCharsets]
            [java.util.zip GZIPOutputStream]))
 
@@ -68,6 +69,10 @@
 
 (defn encode-params [params]
   (codec/form-encode params))
+
+
+(defn url-decode [^String encoded-string]
+  (URLDecoder/decode encoded-string "UTF-8"))
 
 (encode-params {:a 1 :b "$@#/"})
 
