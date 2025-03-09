@@ -16,7 +16,8 @@
 .uui-link {
     @apply text-sky-600 cursor-pointer;
 }
-.uui-table {
+
+table.uui, .uui-table {
     thead {
         tr {
             @apply border-b border-gray-400;
