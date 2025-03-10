@@ -155,6 +155,31 @@
 
   )
 
+
+(defn on-request [context request opts]
+  (swap! (:state opts) conj (:uri request)))
+
+(deftest test-request-subs
+  (reload-context)
+
+  (def state (atom []))
+  (http/register-endpoint context {:method :get :path "/" :fn #'get-index})
+  (http/register-endpoint context {:method :get :path "/a" :fn #'get-index})
+  (http/register-endpoint context {:method :get :path "/b" :fn #'get-index})
+  (http/register-authorize-hook context #'authorize)
+  (http/subscribe-to-request context {:fn #'on-request :state state})
+
+
+
+  (matcho/match (http/request context {:path "/"}) {:status 200 :body "Here"})
+  (matcho/match (http/request context {:path "/a"}) {:status 200 :body "Here"})
+  (matcho/match (http/request context {:path "/b"}) {:status 200 :body "Here"})
+
+  (is (= ["/" "/a" "/b"] @state))
+
+
+  )
+
 (deftest test-auth-flow
   (reload-context)
 

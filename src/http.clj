@@ -263,6 +263,27 @@
             (system/info context ::handle-anonymous-hook (str hook-id) res)
             res)))))
 
+;; notify all subscribers on request - can be used for analytics etc
+
+(def REQUEST_SUBS_KEY :on-request)
+
+(defn subscribe-to-request
+  "subscribe to requests register (fn [context request opts])"
+  [context {f :fn :as opts}]
+  (system/set-system-state context [REQUEST_SUBS_KEY f] opts))
+
+(defn unsubscribe-from-request   [context {f :fn}]
+  (system/clear-system-state context [REQUEST_SUBS_KEY f]))
+
+(defn request-subscriptions [context]
+  (system/get-system-state context [REQUEST_SUBS_KEY]))
+
+(defn notify-on-request [context request]
+  (when-let [subs (request-subscriptions context)]
+    (future
+      (doseq [[f f-opts] subs]
+        (f context request  f-opts)))))
+
 (defn dispatch [system {meth :request-method uri :uri :as req}]
   (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})
         ctx (apply-middlewares ctx req)]
@@ -288,10 +309,10 @@
                   ;; TODO set context for logger
                   (system/info auth-ctx meth uri {:route-params params})
                   (on-request-hooks auth-ctx {:uri uri :method meth :query-params query-params})
-                  (let [res (->>
-                             (f auth-ctx enriched-req)
-                             (format-response auth-ctx))]
-                    (system/info auth-ctx meth uri {:duration (/ (- (System/nanoTime) start) 1000000.0) :status (:status res)})
+                  (let [res (->> (f auth-ctx enriched-req) (format-response auth-ctx))
+                        duration (/ (- (System/nanoTime) start) 1000000.0)]
+                    (system/info auth-ctx meth uri {:duration duration  :status (:status res)})
+                    (notify-on-request auth-ctx (assoc enriched-req :duration duration))
                     res)))))
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
