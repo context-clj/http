@@ -34,6 +34,12 @@
         (ring.middleware.content-type/content-type-response req)
         (ring.util.response/charset "utf-8"))))
 
+(defn set-cookie [response name value & [params]]
+  (ring.util.response/set-cookie response name value params))
+
+(defn get-cookie [request name]
+  (get-in request [:cookies name :value]))
+
 (defn parse-body [b]
   (when b
     (cond (string? b) (cheshire.core/parse-string b keyword)
@@ -234,7 +240,6 @@
      hooks)
     context))
 
-
 (defn register-authorize-hook [context hook-fn-var]
   (system/register-hook context ::authorize hook-fn-var hook-fn-var))
 
@@ -284,6 +289,47 @@
       (doseq [[f f-opts] subs]
         (f context request  f-opts)))))
 
+
+(def REQUEST_HOOK_KEY :request-hooks)
+
+(defn register-request-hook [context {f :fn :as opts}]
+  (assert (var? f))
+  (system/info context ::register-request-hook (str f))
+  (system/set-system-state context [REQUEST_HOOK_KEY f] opts))
+
+(defn unregister-request-hook [context {f :fn :as opts}]
+  (assert (var? f))
+  (system/clear-system-state context [REQUEST_HOOK_KEY f]))
+
+(defn request-hooks [context]
+  (system/get-system-state context [REQUEST_HOOK_KEY]))
+
+(defn handle-request-hooks [context request]
+  (->> (request-hooks context)
+       (reduce (fn [request [_ {f :fn :as opts}]]
+                 (f context request opts))
+               request)))
+
+(def RESPONSE_HOOK_KEY :response-hooks)
+
+(defn register-response-hook [context {f :fn :as opts}]
+  (assert (var? f))
+  (system/info context ::register-response-hook (str f))
+  (system/set-system-state context [RESPONSE_HOOK_KEY f] opts))
+
+(defn unregister-response-hook [context {f :fn :as opts}]
+  (assert (var? f))
+  (system/clear-system-state context [RESPONSE_HOOK_KEY f]))
+
+(defn response-hooks [context]
+  (system/get-system-state context [RESPONSE_HOOK_KEY]))
+
+(defn handle-response-hooks [context request response]
+  (->> (response-hooks context)
+       (reduce (fn [response [_ {f :fn :as opts}]]
+                 (f context request response opts))
+               response)))
+
 (defn dispatch [system {meth :request-method uri :uri :as req}]
   (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})
         ctx (apply-middlewares ctx req)]
@@ -297,6 +343,7 @@
           (let [enriched-req (-> (merge req op)
                                  (assoc :query-params query-params :route-params params)
                                  ring.middleware.cookies/cookies-request)
+                enriched-req (handle-request-hooks ctx enriched-req)
                 auth-ctx (authenticate ctx enriched-req)]
             (if-let [anonimous-response (when (and (authentication-enabled? auth-ctx)
                                                    (not (:public op))
@@ -309,7 +356,10 @@
                   ;; TODO set context for logger
                   (system/info auth-ctx meth uri {:route-params params})
                   (on-request-hooks auth-ctx {:uri uri :method meth :query-params query-params})
-                  (let [res (->> (f auth-ctx enriched-req) (format-response auth-ctx))
+                  (let [res (->> (f auth-ctx enriched-req)
+                                 (format-response auth-ctx)
+                                 (handle-response-hooks auth-ctx enriched-req)
+                                 (ring.middleware.cookies/cookies-response))
                         duration (/ (- (System/nanoTime) start) 1000000.0)]
                     (system/info auth-ctx meth uri {:duration duration  :status (:status res)})
                     (notify-on-request auth-ctx (assoc enriched-req :duration duration))
