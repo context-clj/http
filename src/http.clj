@@ -420,6 +420,7 @@
    :define-hook {::authorize {:args [::operation-definition ::request] :result ::authorized}}
    :config {:binding {:type "string" :default "127.0.0.1" :validator (complement empty?)}
             :port {:type "integer" :default 8080 :required true :validator pos-int?}
+            :max-body {:type "integer" :default 108388608 :required true :validator pos-int?}
             :enable-authorization {:type "boolean"}
             :enable-authentication {:type "boolean"}}})
 
@@ -429,7 +430,8 @@
     (system/info context ::start (str "start http server" config))
     ;; TODO: move to manifest
     (system/manifest-hook context ::on-request {:desc "This hook is called on request and passed method, uri and params"})
-    {:server (server/run-server (fn [req] (#'dispatch context req)) {:ip binding :port port}) :binding binding :port port}))
+    {:server (server/run-server (fn [req] (#'dispatch context req)) config)
+     :binding binding :port port}))
 
 (system/defstop [context state]
   (when-let [stop (:server state)]
