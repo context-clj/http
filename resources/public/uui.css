@@ -23,7 +23,7 @@ table.uui, .uui-table {
             @apply border-b border-gray-400;
         }
         th {
-            @apply px-2 py-1 align-top font-semibold text-gray-600;
+            @apply px-2 py-1 text-left align-top font-semibold text-gray-600;
         }
     }
     tr {
