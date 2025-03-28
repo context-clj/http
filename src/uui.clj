@@ -17,7 +17,7 @@
 
 (defn response [body]
   {:status 200
-   :headers {"content-type" "text/html"}
+   :headers {"content-type" "text/html; ; charset=utf-8"}
    :body (hiccup body)})
 
 (defn rpc [fn-name & [params]]
