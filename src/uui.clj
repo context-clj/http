@@ -61,6 +61,7 @@
   [:html
    [:head
     [:script {:src "/static/htmx.min.js"}]
+    [:script {:src "/static/app.js"}]
     [:link {:rel "stylesheet", :href "/static/app.build.css"}]
     [:meta {:name "htmx-config", :content "{\"scrollIntoViewOnBoost\":false}"}]]
    [:body.text-gray-600 {:hx-boost "true"} body ]])
