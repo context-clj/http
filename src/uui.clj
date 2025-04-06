@@ -108,9 +108,10 @@
   [:svg {:class "size-5 shrink-0 text-gray-400", :viewBox "0 0 20 20", :fill "currentColor", :aria-hidden "true", :data-slot "icon"}
    [:path {:fill-rule "evenodd", :d "M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z", :clip-rule "evenodd"}]])
 
-(defn breadcramp
+
+(defn breadcrumb
   "
-  (breadcramp [\"url1\" \"label\"] [\"url2\" \"label\"] [\"#\" \"label\"]])
+  (breadcrumb [\"url1\" \"label\"] [\"url2\" \"label\"] [\"#\" \"label\"]])
   "
   [& pairs]
   [:ol {:role "list", :class "flex space-x-4 items-center mb-2"}
@@ -123,6 +124,11 @@
                (ico/home "mr-2 size-4 text-gray-400"))
              [:div cnt]])))
         (interpose (ico/chevron-right "size-4 text-gray-400")))])
+
+(defn breadcramp [& pairs]
+  (println "WARN: Use uui/breadcrumb, this function is deprecated, because of typo")
+  (apply breadcrumb pairs))
+
 
 
 (defn format-json [data]
