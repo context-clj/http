@@ -414,6 +414,17 @@
                                  :else body)
                            )))))
 
+(defn make-pool [queue-capacity min-thread-count max-thread-count]
+  (let [ptf   (org.httpkit.PrefixThreadFactory. "worker-")
+        queue (java.util.concurrent.ArrayBlockingQueue. queue-capacity)]
+    (java.util.concurrent.ThreadPoolExecutor.
+     (long min-thread-count)
+     (long max-thread-count)
+     0
+     java.util.concurrent.TimeUnit/MILLISECONDS
+     queue
+     ptf)))
+
 (system/defmanifest
   {:description "http server module"
    :deps []
@@ -422,20 +433,23 @@
             :port {:type "integer" :default 8080 :required true :validator pos-int?}
             :max-body {:type "integer" :default 108388608 :required true :validator pos-int?}
             :enable-authorization {:type "boolean"}
-            :enable-authentication {:type "boolean"}}})
+            :enable-authentication {:type "boolean"}
+            :queue-capacity {:type "integer" :default 20480 :required false :validator pos-int?}
+            :min-thread-count {:type "integer" :default 4 :required false :validator pos-int?}
+            :max-thread-count {:type "integer" :default 8 :required false :validator pos-int?}}})
 
 (system/defstart [context config]
-  (let [binding (:binding config)
-        port (:port config)]
-    (system/info context ::start (str "start http server" config))
+  (let [{:keys [binding port queue-capacity min-thread-count max-thread-count]} config
+        pool (make-pool queue-capacity min-thread-count max-thread-count)
+        http-kit-config (assoc (select-keys config [:port :max-body]) :worker-pool pool)]
+    (system/info context ::config config)
+    (system/info context ::http-kit-config http-kit-config)
     ;; TODO: move to manifest
     (system/manifest-hook context ::on-request {:desc "This hook is called on request and passed method, uri and params"})
-    {:server (server/run-server (fn [req] (#'dispatch context req)) config)
-     :binding binding :port port}))
-
-(system/defstop [context state]
-  (when-let [stop (:server state)]
-    (stop)))
+    {:server (server/run-server (fn [req] (#'dispatch context req)) http-kit-config)
+     :worker-pool pool
+     :binding binding
+     :port port}))
 
 
 (comment
