@@ -451,6 +451,9 @@
      :binding binding
      :port port}))
 
+(system/defstop [context state]
+  (when-let [stop (:server state)]
+    (stop)))
 
 (comment
 
