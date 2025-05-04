@@ -80,6 +80,11 @@
 (defn url-decode [^String encoded-string]
   (URLDecoder/decode encoded-string "UTF-8"))
 
+(defn request-form [{b :body :as request}]
+  (when b
+    (let [body (if (string? b) b (slurp b))]
+      (parse-params body))))
+
 (encode-params {:a 1 :b "$@#/"})
 
 (parse-params "a=2%20;")
