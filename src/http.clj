@@ -366,8 +366,10 @@
                                  (handle-response-hooks auth-ctx enriched-req)
                                  (ring.middleware.cookies/cookies-response))
                         duration (/ (- (System/nanoTime) start) 1000000.0)]
-                    (system/info auth-ctx meth uri {:duration duration  :status (:status res)})
-                    (notify-on-request auth-ctx (assoc enriched-req :duration duration))
+                    (system/info auth-ctx meth uri {:duration duration :status (:status res)})
+                    (notify-on-request auth-ctx (assoc enriched-req
+                                                       :duration duration
+                                                       :status (:status res)))
                     res)))))
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
