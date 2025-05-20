@@ -72,19 +72,55 @@
         "Non-conforming middleware must throw")))
 
 (deftest middleware-test
-  (testing ""
-    (let [handler (fn [_ctx req] {:status 200
-                                  :body (:body req)})]
+  (testing "when middleware modifies request"
+    (let [handler (fn [_ctx req]
+                    {:status 200
+                     :body (get-in req [:headers "x-my-header"])})
+          middleware-1 (fn [f]
+                         (fn [ctx req]
+                           (f ctx
+                              (assoc-in req [:headers "x-my-header"] "foo"))))
+          middleware-2 (fn [f]
+                         (fn [ctx req]
+                           (f ctx
+                              (update-in req [:headers "x-my-header"] #(str % "bar")))))]
       (http/register-endpoint
        context
-       {:method :post :path "/" :fn handler :middleware [http/parse-body]})
+       {:method :post :path "/" :fn handler :middleware [middleware-1 middleware-2]})
 
       (matcho/match
-        (http/dispatch context {:request-method :post
-                                :uri "/"
-                                :body "{\"hello\": \"world\"}"})
+       (http/dispatch context {:request-method :post
+                               :uri "/"
+                               :body "{\"hello\": \"world\"}"})
         {:status 200
-         :body {:hello "world"}}))))
+         :body "foobar"})))
+
+  (testing "when middleware modifies response"
+    (let [handler (fn [_ctx _req]
+                    {:status 200
+                     :body "Success"})
+          middleware (fn [f]
+                       (fn [ctx req]
+                         (if (get-in req [:headers "authorization"])
+                           (f ctx req)
+                           {:status 401
+                            :body "Please log in"})))]
+      (http/register-endpoint
+       context
+       {:method :post :path "/" :fn handler :middleware [middleware]})
+
+      (matcho/match
+       (http/dispatch context {:request-method :post
+                               :uri "/"
+                               :headers {"authorization" "Bearer ..."}})
+        {:status 200
+         :body "Success"})
+
+      (matcho/match
+       (http/dispatch context {:request-method :post
+                               :uri "/"})
+        {:status 401
+         :body "Please log in"}))))
 
 (defn get-index [context req]
   {:status 200 :body "Here"})

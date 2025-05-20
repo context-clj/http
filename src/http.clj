@@ -315,7 +315,7 @@
 
       :else
       (let [query-params (parse-params (:query-string req))]
-        (if-let [{{f :fn :as op} :match params :params} (resolve-endpoint ctx meth uri)]
+        (if-let [{{f :fn middleware :middleware :as op} :match params :params} (resolve-endpoint ctx meth uri)]
           (let [enriched-req (-> (merge req op)
                                  (assoc :query-params query-params :route-params params)
                                  ring.middleware.cookies/cookies-request)
@@ -332,7 +332,8 @@
                   ;; TODO set context for logger
                   (system/info auth-ctx meth uri {:route-params params})
                   (on-request-hooks auth-ctx {:uri uri :method meth :query-params query-params})
-                  (let [res (->> (f auth-ctx enriched-req)
+                  (let [handler ((apply comp middleware) f)
+                        res (->> (handler auth-ctx enriched-req)
                                  (format-response auth-ctx)
                                  (handle-response-hooks auth-ctx enriched-req)
                                  (ring.middleware.cookies/cookies-response))
