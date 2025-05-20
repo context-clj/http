@@ -2,22 +2,28 @@
 
 ## params
 
-
-
 ## Middleware
 
-There are few types of middleware:
+You can pass middleware as an argument to `register-endpoint`.
 
-* context middleware - add something to context, like user or entity, which passed to handlers
-* request transformers - transform request
-* interceptors - when interceptor returns  - it breaks the chain
-* response transformers - transform final response
+```clojure
+(defn handler [ctx req]
+  {:status 200
+   :body "Success"})
 
-Middlewares can be added to specific path branch, for example '/admin'
+(defn auth-middleware [f]
+  (fn [ctx req]
+    (if (get-in req [:headers "authorization"])
+      (f ctx req)
+      {:status 401
+       :body "Please log in"})))
 
+(defn another-middleware [f]
+  (fn [ctx req]
+    (f ctx
+       (assoc-in req [:headers "x-my-header"] "foo"))))
 
-
-
-
-
-
+(http/register-endpoint
+ context
+ {:method :post :path "/" :fn handler :middleware [auth-middleware another-middleware]})
+```

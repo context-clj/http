@@ -92,27 +92,8 @@
 (defn response-body [ctx body]
   (cheshire.core/generate-string body))
 
-(defn register-middleware [ctx mw-fn]
-  (system/update-system-state ctx [:middlewares] (fn [mws] (conj (or mws #{}) mw-fn))))
-
-(defn unregister-middleware [ctx mw-fn]
-  (system/update-system-state ctx [:middlewares] (fn [mws] (disj mw-fn))))
-
 (defn register-authorize-hook [context auth-fn]
   (system/register-hook context :http/authorize auth-fn auth-fn))
-
-
-(defn clear-middlewares [ctx]
-  (system/update-system-state ctx [:middlewares] (fn [mws] #{})))
-
-(defn apply-middlewares [ctx req]
-  (->> (system/get-system-state ctx [:middlewares])
-       (reduce (fn [ctx mw]
-                 (println :ctx-in ctx :mw mw)
-                 (let [ctx (mw ctx req)]
-                   (println :ctx-out ctx :mw mw)
-                   ctx)
-                 ) ctx)))
 
 ;; example work with context
 (defn ctx-remote-addr [ctx]
@@ -129,7 +110,10 @@
 (s/def ::path string?)
 (s/def ::method #(contains? #{:get :post :put :delete :patch :head} %))
 (s/def ::fn ifn?)
-(s/def ::endpoint (s/keys :req-un [::path ::method ::fn]))
+(s/def ::middleware #(or (list? %) (vector? %)))
+(s/def ::public boolean?)
+(s/def ::endpoint (s/keys :req-un [::path ::method ::fn]
+                          :opt-un [::middleware ::public]))
 
 
 (defn subscribe-to-endpoint-register
@@ -167,18 +151,6 @@
        (throw (ex-info "Invalid endpoint"
                        (s/explain-data ~::endpoint ~endpoint)))
        (-register-endpoint ~context ~endpoint))))
-
-(defn -register-context-middleware [context {meth :method path :path f :fn :as opts}]
-  (let [route (parse-route (str/replace path #"^/" ""))
-        path (into route [meth])]
-    (system/info context ::register-endpoint (str meth " " path " -> " f))
-    (system/update-system-state
-     context [:middlewares]
-     (fn [x] (assoc-in x path opts)))))
-
-;; TODO find all mw and call it in request - updating context
-(defmacro register-context-middleware [context {_path :path _method :method _fn :fn :as mw}]
-  `(-register-context-middleware ~context ~mw))
 
 (defn clear-endpoints [ctx]
   (system/clear-system-state ctx [:endpoints]))
@@ -336,15 +308,14 @@
                response)))
 
 (defn dispatch [system {meth :request-method uri :uri :as req}]
-  (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})
-        ctx (apply-middlewares ctx req)]
+  (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})]
     (cond
       (and (contains? #{:get :head} meth) (str/starts-with? (or uri "") "/static/"))
       (handle-static req)
 
       :else
       (let [query-params (parse-params (:query-string req))]
-        (if-let [{{f :fn :as op} :match params :params} (resolve-endpoint ctx meth uri)]
+        (if-let [{{f :fn middleware :middleware :as op} :match params :params} (resolve-endpoint ctx meth uri)]
           (let [enriched-req (-> (merge req op)
                                  (assoc :query-params query-params :route-params params)
                                  ring.middleware.cookies/cookies-request)
@@ -361,7 +332,8 @@
                   ;; TODO set context for logger
                   (system/info auth-ctx meth uri {:route-params params})
                   (on-request-hooks auth-ctx {:uri uri :method meth :query-params query-params})
-                  (let [res (->> (f auth-ctx enriched-req)
+                  (let [handler ((apply comp middleware) f)
+                        res (->> (handler auth-ctx enriched-req)
                                  (format-response auth-ctx)
                                  (handle-response-hooks auth-ctx enriched-req)
                                  (ring.middleware.cookies/cookies-response))
@@ -484,8 +456,6 @@
 
   (request context {:path "/api"})
 
-  (register-middleware context #'logging-mw)
-
   (register-endpoint context {:method :get :path  "/test" :fn  #'get-test})
 
   (register-endpoint context {:method  :get :path "/Patient/:id" :fn #'get-test})
@@ -498,14 +468,10 @@
 
   (clear-endpoints context)
 
-
-
   (resolve-endpoint context :get "/test")
   (resolve-endpoint context :get "/Patient/pt-1")
 
-  (system/get-system-state context [:endpoints])
-
-  (clear-middlewares context)
+  (system/get-system-state context [:endpoints]) 
 
   (time (request context {:path "/test"}))
   (request context {:path "/Patient/pt-1"})
