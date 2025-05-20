@@ -1,7 +1,7 @@
 (ns http-test
   (:require [system]
             [http]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.string]
             [matcho.core :as matcho]))
 
@@ -11,11 +11,17 @@
 (declare ensure-context)
 (declare reload-context)
 
-(comment
+(defn start-stop-system-fixture [f]
   (ensure-context)
+  (f)
+  (system/stop-system context))
+
+(defn reload-system-and-clean-resources-fixture [f]
   (reload-context)
-  context
-  (http/authorization-enabled? context))
+  (f))
+
+(use-fixtures :once start-stop-system-fixture)
+(use-fixtures :each reload-system-and-clean-resources-fixture)
 
 (deftest test-register-endpoint
   (ensure-context)
