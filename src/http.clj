@@ -379,7 +379,9 @@
 (defn ndjson-content-type? [resp]
   (= "application/x-ndjson" (get-in resp [:headers :content-type])))
 
-(defn request [ctx {path :path qp :query-params :as opts}]
+(defn request
+  "This function is for testing purposes only. It is not recommended to use it as an actual HTTP client"
+  [ctx {path :path qp :query-params :as opts}]
   (let [url (str "http://localhost:" (system/get-system-state ctx [:port]) path)
         resp @(http-client/get url opts)]
     (system/info ctx ::get url)
