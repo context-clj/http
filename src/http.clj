@@ -320,7 +320,8 @@
                                  (assoc :query-params query-params :route-params params)
                                  ring.middleware.cookies/cookies-request)
                 enriched-req (handle-request-hooks ctx enriched-req)
-                auth-ctx (authenticate ctx enriched-req)]
+                auth-ctx (cond-> ctx
+                           (authentication-enabled? ctx) (authenticate enriched-req))]
             (if-let [anonimous-response (when (and (authentication-enabled? auth-ctx)
                                                    (not (:public op))
                                                    (not (authenticated? auth-ctx)))
