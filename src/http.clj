@@ -308,42 +308,38 @@
                response)))
 
 (defn dispatch [system {meth :request-method uri :uri :as req}]
-  (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})]
-    (cond
-      (and (contains? #{:get :head} meth) (str/starts-with? (or uri "") "/static/"))
+  (let [ctx (system/new-context system {::uri uri ::method meth ::remote-addr (:remote-addr req)})
+        ctx (apply-middlewares ctx req)]
+    (if (and (contains? #{:get :head} meth)
+             (str/starts-with? (or uri "") "/static/"))
       (handle-static req)
-
-      :else
       (let [query-params (parse-params (:query-string req))]
-        (if-let [{{f :fn middleware :middleware :as op} :match params :params} (resolve-endpoint ctx meth uri)]
-          (let [enriched-req (-> (merge req op)
-                                 (assoc :query-params query-params :route-params params)
-                                 ring.middleware.cookies/cookies-request)
-                enriched-req (handle-request-hooks ctx enriched-req)
-                auth-ctx (cond-> ctx
-                           (authentication-enabled? ctx) (authenticate enriched-req))]
-            (if-let [anonimous-response (when (and (authentication-enabled? auth-ctx)
-                                                   (not (:public op))
-                                                   (not (authenticated? auth-ctx)))
-                                          (handle-anonymous auth-ctx enriched-req))]
-              anonimous-response
-              (if (and (authorization-enabled? auth-ctx) (not (authorize auth-ctx enriched-req)))
-                {:status 403}
-                (let [start (System/nanoTime)]
-                  ;; TODO set context for logger
-                  (system/info auth-ctx meth uri {:route-params params})
-                  (on-request-hooks auth-ctx {:uri uri :method meth :query-params query-params})
-                  (let [handler ((apply comp middleware) f)
-                        res (->> (handler auth-ctx enriched-req)
-                                 (format-response auth-ctx)
-                                 (handle-response-hooks auth-ctx enriched-req)
-                                 (ring.middleware.cookies/cookies-response))
-                        duration (/ (- (System/nanoTime) start) 1000000.0)]
-                    (system/info auth-ctx meth uri {:duration duration :status (:status res)})
-                    (notify-on-request auth-ctx (assoc enriched-req
-                                                       :duration duration
-                                                       :status (:status res)))
-                    res)))))
+        (if-let [{{f :fn :as op} :match params :params}
+                 (resolve-endpoint ctx meth uri)]
+          (if (and (authorization-enabled? ctx)
+                   (not (authorize ctx op req)))
+            {:status 403}
+            (let [start (System/nanoTime)]
+              ;; TODO set context for logger
+              (system/info ctx meth uri {:route-params params
+                                         :start-time (-> java.time.ZoneOffset/UTC
+                                                         java.time.ZonedDateTime/now
+                                                         str)})
+              (on-request-hooks ctx {:uri uri
+                                     :method meth
+                                     :query-params query-params})
+              (let [res (->>
+                         (assoc (merge req op)
+                                :query-params query-params
+                                :route-params params)
+                         (f ctx)
+                         (format-response ctx))]
+                (system/info ctx meth uri {:duration (/ (- (System/nanoTime) start) 1000000.0)
+                                           :status (:status res)
+                                           :end-time (-> java.time.ZoneOffset/UTC
+                                                         java.time.ZonedDateTime/now
+                                                         str)})
+                res)))
           (do
             (system/info ctx meth (str uri " not found" {:http.status 404}))
             {:status 404
