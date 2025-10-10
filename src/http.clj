@@ -331,7 +331,8 @@
                 {:status 403}
                 (let [start (System/nanoTime)]
                   ;; TODO set context for logger
-                  (system/info auth-ctx meth uri {:route-params params})
+                  (system/info auth-ctx meth uri {:route-params params
+                                                  :query-params query-params})
                   (on-request-hooks auth-ctx {:uri uri :method meth :query-params query-params})
                   (let [handler ((apply comp middleware) f)
                         res (->> (handler auth-ctx enriched-req)
