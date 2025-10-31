@@ -6,7 +6,6 @@
         com.fasterxml.jackson.core/jackson-core     {:mvn/version "2.13.5"}
         com.fasterxml.jackson.core/jackson-databind {:mvn/version "2.13.5"}
         http-kit/http-kit                           {:mvn/version "2.5.3"}
-        com.cognitect/transit-clj                   {:mvn/version "1.0.333"}
         ring/ring                                   {:mvn/version "1.10.0"}
         ring/ring-defaults                          {:mvn/version "0.3.4"}
         org.apache.commons/commons-compress         {:mvn/version "1.26.0"}

@@ -9,7 +9,6 @@
     [clojure.pprint :as pprint]
     [clojure.string :as str]
     [clojure.walk]
-    [cognitect.transit :as transit]
     [ring.middleware.multipart-params :as multi]
     [ring.middleware.multipart-params.byte-array :as ba]
     [ring.util.codec]
@@ -88,12 +87,6 @@
     (with-out-str (pprint/pprint body))
     (with-out-str (pr body))))
 
-
-(defmethod do-format :transit [_ body _]                    ; (transit always ugly)
-  (ring.util.io/piped-input-stream
-    (fn [out] (transit/write (transit/writer out :json) body))))
-
-
 (defmulti parse-format (fn [fmt _ _] fmt))
 
 
@@ -121,14 +114,6 @@
            PushbackReader.
            edn/read)
        :else b)}))
-
-
-(defmethod parse-format :transit [_ _ {b :body}]
-  (when b
-    (let [r (cond (string? b) (transit/reader (ByteArrayInputStream. (.getBytes ^String b)) :json)
-                  (instance? InputStream b) (transit/reader b :json))]
-      {:resource (transit/read r)})))
-
 
 (defmethod parse-format :form-data [_ _ req]
   {:form-params (clojure.walk/keywordize-keys (:multipart-params (multi/multipart-params-request req {:store (ba/byte-array-store)})))})
@@ -201,7 +186,6 @@
    "application/ndjson"                :ndjson
    "application/x-ndjson"              :ndjson
 
-   "application/transit+json"          :transit
    "text/yaml"                         :yaml
    "text/edn"                          :edn
    "text/plain"                        :text
@@ -270,7 +254,6 @@
       selected-accept
       (get {:edn     "text/edn"
             :json    "application/json"
-            :transit "application/transit+json"
             :js      "text/javascript"
             :yaml    "text/yaml"} fmt))))
 
@@ -280,7 +263,6 @@
    "edn"     :edn
    "cda"     :cda
    "js"      :js
-   "transit" :transit
    "yaml"    :yaml})
 
 (def default-response-format :json)
